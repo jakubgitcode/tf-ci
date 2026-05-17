@@ -74,6 +74,7 @@ jobs:
     uses: jakubgitcode/tf-cd/.github/workflows/reusable-plan.yml@main
     with:
       environment: dev
+      use_oidc: false
       working_directory: ./infra
       tfvars_file: environments/dev.tfvars
       backend_key: cross-repo/dev.terraform.tfstate

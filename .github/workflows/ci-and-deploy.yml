@@ -50,6 +50,7 @@ jobs:
           subscription-id: ${{ secrets.ARM_SUBSCRIPTION_ID }}
           tenant-id: ${{ secrets.ARM_TENANT_ID }}
           secret: ${{ secrets.ARM_CLIENT_SECRET }}
+          use-oidc: false
           #allow-no-subscriptions: true
     continue-on-error: true
 
@@ -124,6 +125,7 @@ jobs:
     uses: jakubgitcode/tf-cd/.github/workflows/reusable-plan.yml@main
     with:
       environment: dev
+      use_oidc: false
       working_directory: ./infra
       tfvars_file: environments/dev.tfvars
       backend_key: cross-repo/dev.terraform.tfstate
@@ -137,6 +139,7 @@ jobs:
     uses: jakubgitcode/tf-cd/.github/workflows/reusable-apply.yml@main
     with:
       environment: dev
+      use_oidc: false
       working_directory: ./infra
       backend_key: cross-repo/dev.terraform.tfstate
     secrets: inherit
@@ -148,6 +151,7 @@ jobs:
     uses: jakubgitcode/tf-cd/.github/workflows/reusable-plan.yml@main
     with:
       environment: prod
+      use_oidc: false
       working_directory: ./infra
       tfvars_file: environments/prod.tfvars
       backend_key: cross-repo/prod.terraform.tfstate
@@ -161,6 +165,7 @@ jobs:
     uses: jakubgitcode/tf-cd/.github/workflows/reusable-apply.yml@main
     with:
       environment: prod
+      use_oidc: false
       github_environment: production    # ← wymaga zatwierdzenia w GitHub!
       working_directory: ./infra
       backend_key: cross-repo/prod.terraform.tfstate
