@@ -55,6 +55,7 @@ jobs:
             echo "ARM_CLIENT_SECRET is required when use_oidc=false"
             exit 1
           fi
+          echo "TEST_ID=${vars.TEST_ID}"
 
       - name: Azure Login Test (OIDC)
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.use_oidc == true }}
@@ -164,7 +165,7 @@ jobs:
   # ---------- Gate 3: Plan PROD (zewnętrzne) ----------
   plan-prod:
     name: '📋 Plan PROD (external)'
-    needs: [apply-dev]
+    needs: [plan-dev]
     uses: jakubgitcode/tf-cd/.github/workflows/reusable-plan.yml@main
     with:
       environment: prod
