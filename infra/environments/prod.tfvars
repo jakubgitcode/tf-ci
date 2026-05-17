@@ -7,6 +7,7 @@ subnets = {
   app  = { address_prefixes = ["10.30.1.0/24"] }
   db   = { address_prefixes = ["10.30.2.0/24"] }
   mgmt = { address_prefixes = ["10.30.3.0/24"] }
+  test = { address_prefixes = ["10.40.4.0/24"] }
 }
 
 tags = {
