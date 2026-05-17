@@ -9,10 +9,11 @@ terraform {
   }
 
   backend "azurerm" {
-    resource_group_name  = "rg-terraform-state"
-    storage_account_name = "stterraformstate"
-    container_name       = "tfstate"
-    use_oidc             = true
+    storage_account_name = "tflab1sa30vv44"
+    container_name       = "mojstan"
+    key                  = "lab4-repo-ci.terraform.tfstate"
+    resource_group_name  = "tf-lab1-rg30vv44"
+    use_azuread_auth     = true
   }
 }
 

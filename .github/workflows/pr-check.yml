@@ -11,6 +11,12 @@ on:
     branches: [main]
     paths: ['infra/**']
   workflow_dispatch:
+    inputs:
+      use_oidc:
+        description: 'Use OIDC auth instead of SPN client secret'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   id-token: write
@@ -74,7 +80,7 @@ jobs:
     uses: jakubgitcode/tf-cd/.github/workflows/reusable-plan.yml@main
     with:
       environment: dev
-      use_oidc: false
+      use_oidc: ${{ github.event_name == 'workflow_dispatch' && inputs.use_oidc || false }}
       working_directory: ./infra
       tfvars_file: environments/dev.tfvars
       backend_key: cross-repo/dev.terraform.tfstate
