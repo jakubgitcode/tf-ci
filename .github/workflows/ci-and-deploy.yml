@@ -6,7 +6,7 @@
 #   1. LOKALNE joby CI — fmt, validate, tflint, Trivy
 #      (biegną w TYM repo, bo dotyczą TEGO kodu)
 #   2. ZEWNĘTRZNE joby CD — plan, apply
-#      (wołane z przyklad_blok4_drugie_cd, bo to CENTRALNA logika deploy)
+#      (wołane z jakubgitcode/tf-cd, bo to CENTRALNA logika deploy)
 #
 # Dlaczego ten podział?
 #   - CI = "czy mój kod jest poprawny" → odpowiada autor kodu
@@ -17,7 +17,7 @@
 # ║                ZAMIEŃ "TWOJA-ORG" NA NAZWĘ ORGANIZACJI      ║
 # ╚══════════════════════════════════════════════════════════════╝
 
-name: 'CI + CD: lint → security → plan → apply'
+name: 'CI + CD: lint + security + plan + apply'
 
 on:
   push:
@@ -120,7 +120,7 @@ jobs:
     name: '📋 Plan DEV (external)'
     needs: [trivy]                        # dopiero po przejściu CI
     if: github.ref == 'refs/heads/main'   # tylko na main (nie PR)
-    uses: TWOJA-ORG/przyklad_blok4_drugie_cd/.github/workflows/reusable-plan.yml@main
+    uses: jakubgitcode/tf-cd/.github/workflows/reusable-plan.yml@main
     with:
       environment: dev
       working_directory: ./infra
@@ -133,7 +133,7 @@ jobs:
     name: '🚀 Apply DEV (external)'
     needs: [plan-dev]
     if: needs.plan-dev.outputs.has_changes == 'true'
-    uses: TWOJA-ORG/przyklad_blok4_drugie_cd/.github/workflows/reusable-apply.yml@main
+    uses: jakubgitcode/tf-cd/.github/workflows/reusable-apply.yml@main
     with:
       environment: dev
       working_directory: ./infra
@@ -144,7 +144,7 @@ jobs:
   plan-prod:
     name: '📋 Plan PROD (external)'
     needs: [apply-dev]
-    uses: TWOJA-ORG/przyklad_blok4_drugie_cd/.github/workflows/reusable-plan.yml@main
+    uses: jakubgitcode/tf-cd/.github/workflows/reusable-plan.yml@main
     with:
       environment: prod
       working_directory: ./infra
@@ -157,7 +157,7 @@ jobs:
     name: '🚀 Apply PROD (external, approval)'
     needs: [plan-prod]
     if: needs.plan-prod.outputs.has_changes == 'true'
-    uses: TWOJA-ORG/przyklad_blok4_drugie_cd/.github/workflows/reusable-apply.yml@main
+    uses: jakubgitcode/tf-cd/.github/workflows/reusable-apply.yml@main
     with:
       environment: prod
       github_environment: production    # ← wymaga zatwierdzenia w GitHub!
