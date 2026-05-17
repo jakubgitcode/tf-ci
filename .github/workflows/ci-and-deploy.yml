@@ -1,0 +1,166 @@
+# ==================================================
+# CI + CD: Składnia lokalna → Deploy z centralnego repo
+# ==================================================
+#
+# Ten workflow ŁĄCZY dwa wzorce:
+#   1. LOKALNE joby CI — fmt, validate, tflint, Trivy
+#      (biegną w TYM repo, bo dotyczą TEGO kodu)
+#   2. ZEWNĘTRZNE joby CD — plan, apply
+#      (wołane z przyklad_blok4_drugie_cd, bo to CENTRALNA logika deploy)
+#
+# Dlaczego ten podział?
+#   - CI = "czy mój kod jest poprawny" → odpowiada autor kodu
+#   - CD = "jak wdrożyć w standardowy sposób" → odpowiada zespół platformowy
+#   - Zmiany w procesie deploy = 1 PR w repo CD (propagacja do WSZYSTKICH projektów)
+#
+# ╔══════════════════════════════════════════════════════════════╗
+# ║                ZAMIEŃ "TWOJA-ORG" NA NAZWĘ ORGANIZACJI      ║
+# ╚══════════════════════════════════════════════════════════════╝
+
+name: 'CI + CD: lint → security → plan → apply'
+
+on:
+  push:
+    branches: [main]
+    paths: ['infra/**']
+  pull_request:
+    branches: [main]
+    paths: ['infra/**']
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+# =====================================================
+# CZĘŚĆ 1 — CI: lokalne sprawdzenie składni i quality
+# =====================================================
+
+jobs:
+
+  test-credentials:
+    name: '🔐 Test Azure Credentials'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Azure Login Test
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          #subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+    continue-on-error: true
+
+  # ---------- Gate 1a: Format ----------
+  format:
+    name: '🎨 Format Check'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - name: terraform fmt
+        run: terraform fmt -check -recursive -diff ./infra
+
+  # ---------- Gate 1b: Validate ----------
+  validate:
+    name: '✅ Validate'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./infra
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - run: terraform init -backend=false
+      - run: terraform validate -no-color
+
+  # ---------- Gate 1c: TFLint ----------
+  tflint:
+    name: '🔍 TFLint'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./infra
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - run: terraform init -backend=false
+
+      - uses: terraform-linters/setup-tflint@v4
+      - name: TFLint
+        run: |
+          tflint --init
+          tflint --format compact --force
+
+  # ---------- Gate 2: Security ----------
+  trivy:
+    name: '🛡️ Trivy Security'
+    needs: [format, validate, tflint]     # czeka na WSZYSTKIE lokalne gate'y
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'config'
+          scan-ref: './infra'
+          format: 'table'
+          exit-code: '1'
+          severity: 'HIGH,CRITICAL'
+
+  # =====================================================
+  # CZĘŚĆ 2 — CD: wywołanie workflow z DRUGIEGO repo
+  # =====================================================
+  # Poniższe joby NIE zawierają logiki terraform.
+  # Wołają reusable workflow z centralnego repo CD.
+  # Jedna zmiana w repo CD → aktualizacja WSZYSTKICH projektów.
+
+  # ---------- Gate 3: Plan DEV (zewnętrzne) ----------
+  plan-dev:
+    name: '📋 Plan DEV (external)'
+    needs: [trivy]                        # dopiero po przejściu CI
+    if: github.ref == 'refs/heads/main'   # tylko na main (nie PR)
+    uses: TWOJA-ORG/przyklad_blok4_drugie_cd/.github/workflows/reusable-plan.yml@main
+    with:
+      environment: dev
+      working_directory: ./infra
+      tfvars_file: environments/dev.tfvars
+      backend_key: cross-repo/dev.terraform.tfstate
+    secrets: inherit
+
+  # ---------- Gate 4: Apply DEV (zewnętrzne) ----------
+  apply-dev:
+    name: '🚀 Apply DEV (external)'
+    needs: [plan-dev]
+    if: needs.plan-dev.outputs.has_changes == 'true'
+    uses: TWOJA-ORG/przyklad_blok4_drugie_cd/.github/workflows/reusable-apply.yml@main
+    with:
+      environment: dev
+      working_directory: ./infra
+      backend_key: cross-repo/dev.terraform.tfstate
+    secrets: inherit
+
+  # ---------- Gate 3: Plan PROD (zewnętrzne) ----------
+  plan-prod:
+    name: '📋 Plan PROD (external)'
+    needs: [apply-dev]
+    uses: TWOJA-ORG/przyklad_blok4_drugie_cd/.github/workflows/reusable-plan.yml@main
+    with:
+      environment: prod
+      working_directory: ./infra
+      tfvars_file: environments/prod.tfvars
+      backend_key: cross-repo/prod.terraform.tfstate
+    secrets: inherit
+
+  # ---------- Gate 4: Apply PROD (zewnętrzne, z APPROVAL) ----------
+  apply-prod:
+    name: '🚀 Apply PROD (external, approval)'
+    needs: [plan-prod]
+    if: needs.plan-prod.outputs.has_changes == 'true'
+    uses: TWOJA-ORG/przyklad_blok4_drugie_cd/.github/workflows/reusable-apply.yml@main
+    with:
+      environment: prod
+      github_environment: production    # ← wymaga zatwierdzenia w GitHub!
+      working_directory: ./infra
+      backend_key: cross-repo/prod.terraform.tfstate
+    secrets: inherit

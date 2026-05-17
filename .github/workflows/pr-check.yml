@@ -1,0 +1,79 @@
+# ==================================================
+# PR-only: Sprawdź składnię + plan preview
+# ==================================================
+# Na PR: pełne CI + plan (bez apply).
+# Plan komentowany na PR dzięki zewnętrznemu reusable workflow.
+
+name: 'PR — lint + plan preview'
+
+on:
+  pull_request:
+    branches: [main]
+    paths: ['infra/**']
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+jobs:
+  # --- Lokalne CI (te same joby co w ci-and-deploy) ---
+  format:
+    name: '🎨 Format'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - run: terraform fmt -check -recursive -diff ./infra
+
+  validate:
+    name: '✅ Validate'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./infra
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - run: terraform init -backend=false
+      - run: terraform validate -no-color
+
+  tflint:
+    name: '🔍 TFLint'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./infra
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - run: terraform init -backend=false
+      - uses: terraform-linters/setup-tflint@v4
+      - run: tflint --init && tflint --format compact --force
+
+  trivy:
+    name: '🛡️ Trivy'
+    needs: [format, validate, tflint]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'config'
+          scan-ref: './infra'
+          format: 'table'
+          exit-code: '1'
+          severity: 'HIGH,CRITICAL'
+
+  # --- Plan DEV z zewnętrznego repo (tylko preview, bez apply) ---
+  plan-preview:
+    name: '📋 Plan Preview (external)'
+    needs: [trivy]
+    #uses: TWOJA-ORG/przyklad_blok4_drugie_cd/.github/workflows/reusable-plan.yml@main
+    uses: jakubgitcode/tf-cd/.github/workflows/reusable-plan.yml@main
+    with:
+      environment: dev
+      working_directory: ./infra
+      tfvars_file: environments/dev.tfvars
+      backend_key: cross-repo/dev.terraform.tfstate
+    secrets: inherit
